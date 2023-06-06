@@ -1,6 +1,7 @@
 use std::fs::{File, self};
 use std::env;
 use std::io::{self, Write, BufReader, BufRead};
+use std::path::PathBuf;
 use clap::{Parser, Subcommand, ValueEnum};
 
 mod user_actions;
@@ -65,7 +66,9 @@ impl Default for AppConfig {
 #[clap(about = "A CLI controller for managing Jellyfin", long_about = None)]
 struct Cli {
     #[clap(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
+    #[clap(long)]
+    cfg: Option<PathBuf>,
 }
 
     #[derive(Debug, Subcommand)]
@@ -225,15 +228,23 @@ enum ReportType {
 }
 
 fn main() -> Result<(), confy::ConfyError> {
-    
-    let cfg: AppConfig = confy::load("jellyroller")?;
+    let args = Cli::parse();
+    let cfg: AppConfig = match args.cfg {
+        Some(cfg) => confy::load_path(cfg)?,
+        None => confy::load("jellyroller")?,
+    };
     if cfg.status == "not configured" {
         println!("Application is not configured!");
         initial_config(cfg);
         std::process::exit(0);
     }
-    let args = Cli::parse();
-    match args.command {
+
+    // Show help if the application is configured and no cmd is given
+    if args.command.is_none() {
+        Cli::parse_from(["", "help"]);
+    }
+
+    match args.command.unwrap() {
         // User based commands
         Commands::AddUser { username, password } => {
             add_user(&cfg, username, password);
